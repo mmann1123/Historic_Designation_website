@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, follow">
+<title>Map of Exclusionary Zones of DC &mdash; Historic Designation Without Representation</title>
+<meta name="description" content="Affordable housing units built since 2015 mapped against DC historic districts and single-family zoning (R-1 through R-3). Data from Open Data DC.">
+<link rel="icon" type="image/x-icon" href="assets/favicon.ico_format_100w-6d66d5">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+  :root {
+    --blue: #3f76d9;
+    --blue-dark: #2a5cc0;
+    --purple: #7b6ac6;
+    --purple-dark: #6353b3;
+    --tan: #b9a35c;
+    --tan-dark: #a08b45;
+    --ink: #2b2b2b;
+    --muted: #6f6f6f;
+    --font: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  }
+  html, body { height: 100%; margin: 0; background: #f2f0eb; font-family: var(--font); color: var(--ink); }
+  #map { position: absolute; inset: 0; background: #f2f0eb; }
+  .leaflet-container { font-family: var(--font); }
+  .leaflet-container a { color: var(--blue-dark); }
+
+  /* ---- Legend card (mirrors the original CARTO Builder legend) ---- */
+  .legend {
+    position: absolute; top: 12px; left: 12px; z-index: 1000;
+    width: 250px; max-height: calc(100% - 24px); overflow: auto;
+    background: #fff; border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.04);
+    padding: 12px 14px 10px; box-sizing: border-box;
+  }
+  .legend h1 { font-size: 14px; font-weight: 600; margin: 0 0 8px; line-height: 1.3; color: var(--ink); }
+  .legend h2 { font-size: 13px; font-weight: 600; margin: 10px 0 3px; color: var(--ink); }
+  .legend .cap { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #8a8a8a; font-weight: 600; margin: 0 0 4px; }
+  .legend svg { display: block; overflow: visible; }
+  .legend svg text { font-family: var(--font); font-size: 12px; fill: var(--ink); }
+  .legend svg text.avg { fill: #8a8a8a; font-size: 11px; }
+  .legend svg line { stroke: #b5b5b5; stroke-width: 1; stroke-dasharray: 1 3; }
+  .legend .row { display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink); padding: 3px 0; cursor: pointer; user-select: none; }
+  .legend .row .sw { width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+  .legend .row.off { color: #b0b0b0; }
+  .legend .row.off .sw { background: #ddd !important; }
+  .legend .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .legend .chip { font-size: 10px; padding: 1px 7px; border-radius: 12px; border: 1px solid var(--blue); color: var(--blue-dark); background: rgba(63,118,217,.10); cursor: pointer; user-select: none; }
+  .legend .chip.off { border-color: #ccc; color: #999; background: #fff; }
+  .legend .src { font-size: 9px; color: #9a9a9a; margin: 8px 0 0; line-height: 1.3; letter-spacing: .01em; }
+  .legend .src a { color: var(--muted); }
+  .legend .toggle { display: none; }
+
+  /* ---- Popups ---- */
+  .leaflet-popup-content-wrapper { border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  .leaflet-popup-content { margin: 12px 14px; font-size: 12.5px; line-height: 1.45; min-width: 200px; }
+  .pp h3 { margin: 0 0 4px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  .pp .addr { color: var(--muted); margin-bottom: 6px; }
+  .pp table { border-collapse: collapse; width: 100%; }
+  .pp td { padding: 1px 0; vertical-align: top; }
+  .pp td:first-child { color: var(--muted); padding-right: 10px; white-space: nowrap; }
+  .pp td:last-child { text-align: right; font-weight: 600; }
+  .pp .big { font-size: 22px; font-weight: 700; color: var(--blue-dark); line-height: 1.1; margin: 2px 0 4px; }
+  .pp .big small { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; margin-left: 4px; }
+  .pp .tag { display: inline-block; font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; background: #eee; color: #555; margin-bottom: 4px; }
+
+  /* ---- Embed mode helpers ---- */
+  .explore {
+    position: absolute; inset: 0; z-index: 900; display: flex; align-items: center; justify-content: center;
+    pointer-events: none; transition: opacity .35s ease;
+  }
+  .explore span {
+    font-family: var(--font); font-weight: 700; font-size: clamp(28px, 7vw, 84px); color: rgba(60,60,60,.85);
+    text-shadow: 0 0 18px rgba(255,255,255,.95), 0 0 6px rgba(255,255,255,.95);
+    letter-spacing: -.01em;
+  }
+  .explore.hide { opacity: 0; }
+  .fullscreen-link {
+    position: absolute; top: 12px; right: 12px; z-index: 1000; background: #fff; border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.18); padding: 6px 10px; font-size: 12px; font-weight: 600;
+    color: var(--ink); text-decoration: none;
+  }
+  .fullscreen-link:hover { background: #f6f6f6; }
+  .leaflet-control-attribution { font-size: 10px; }
+
+  @media (max-width: 640px) {
+    .legend { width: 210px; padding: 10px 12px; }
+    .legend .toggle { display: block; position: absolute; top: 8px; right: 10px; font-size: 18px; line-height: 1; cursor: pointer; color: #888; }
+    .legend.collapsed > *:not(h1):not(.toggle) { display: none; }
+    .legend.collapsed h1 { margin: 0; padding-right: 20px; }
+    .leaflet-top.leaflet-right { top: 40px; }
+  }
+</style>
+</head>
+<body>
+<div id="map" role="application" aria-label="Interactive map of affordable housing, historic districts and single-family zoning in Washington, DC"></div>
+
+<aside class="legend" id="legend">
+  <span class="toggle" id="legendToggle" title="Collapse legend">&minus;</span>
+  <h1>Affordable Housing Units Since 2015</h1>
+  <p class="cap">Units</p>
+  <svg id="bubbleLegend" width="218" height="0" aria-hidden="true"></svg>
+  <div class="chips" id="statusChips" title="Toggle project status">
+    <span class="chip" data-status="Completed 2015 to Date">Completed</span>
+    <span class="chip" data-status="Under Construction">Under construction</span>
+    <span class="chip" data-status="Pipeline">Pipeline</span>
+  </div>
+  <h2>Special Designation</h2>
+  <div class="row" data-layer="historic"><span class="sw" style="background:var(--purple)"></span>Historic Districts</div>
+  <h2>Zoning</h2>
+  <div class="row" data-layer="zoning"><span class="sw" style="background:var(--tan)"></span>Single Family R1&ndash;3</div>
+  <p class="src">Data: <a href="https://opendata.dc.gov/" target="_blank" rel="noopener">Open Data DC</a>, Sept 2026 &middot; Click a bubble or area for details</p>
+</aside>
+
+<script>
+(function () {
+  var params = new URLSearchParams(location.search);
+  var EMBED = params.get('embed') === '1';
+
+  // Extent of the original CARTO map (central DC).
+  var HOME_BOUNDS = L.latLngBounds([38.8645, -77.0572], [38.9121, -76.9315]);
+
+  var map = L.map('map', {
+    zoomControl: true,
+    scrollWheelZoom: !EMBED,
+    attributionControl: true,
+    preferCanvas: true,
+    zoomSnap: 0.25, zoomDelta: 0.5
+  });
+  map.zoomControl.setPosition('topright');
+
+  // Basemap: DC GIS "Light Gray" canvas (free, labelled, zooms to street level) over Esri's
+  // World Light Gray canvas, which only shows outside the DC tile extent.
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, maxNativeZoom: 16, attribution: 'Basemap &copy; <a href="https://www.esri.com/">Esri</a>, <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+  L.tileLayer('https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/DC_Basemap_LightGray_WebMercator/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, maxNativeZoom: 19, bounds: [[38.79, -77.12], [38.996, -76.91]],
+    attribution: '&copy; <a href="https://dcgis.dc.gov/">DC GIS</a> &middot; Data: <a href="https://opendata.dc.gov/">Open Data DC</a>'
+  }).addTo(map);
+  map.setMaxBounds([[38.60, -77.45], [39.20, -76.60]]);
+  map.setMinZoom(10);
+
+  map.fitBounds(HOME_BOUNDS);
+  map.whenReady(function () { map.invalidateSize(); map.fitBounds(HOME_BOUNDS); });
+
+  // ---- Embed niceties: "Click to Explore" overlay + full-screen link ----
+  if (EMBED) {
+    var ov = document.createElement('div');
+    ov.className = 'explore';
+    ov.innerHTML = '<span>Click to Explore</span>';
+    document.body.appendChild(ov);
+    var armed = false;
+    function arm() {
+      if (armed) return; armed = true;
+      map.scrollWheelZoom.enable();
+      ov.classList.add('hide');
+      setTimeout(function () { ov.remove(); }, 400);
+    }
+    map.once('click', arm);
+    map.once('dragstart', arm);
+    map.once('zoomstart', arm);
+
+    var fs = document.createElement('a');
+    fs.className = 'fullscreen-link';
+    fs.href = 'map.html';
+    fs.target = '_blank';
+    fs.rel = 'noopener';
+    fs.textContent = 'Open full-screen ↗';
+    document.body.appendChild(fs);
+    document.querySelector('.leaflet-top.leaflet-right').style.top = '40px';
+  }
+
+  // ---- Styling ----
+  var STYLE = {
+    zoning:   { color: '#a08b45', weight: 0.8, opacity: 0.55, fillColor: '#b9a35c', fillOpacity: 0.5 },
+    historic: { color: '#6353b3', weight: 0.9, opacity: 0.55, fillColor: '#7b6ac6', fillOpacity: 0.42 },
+    bubble:   { color: '#2a5cc0', weight: 1, opacity: 0.85, fillColor: '#3f76d9', fillOpacity: 0.55 }
+  };
+  var R_MIN = 2.5, R_MAX = 26;  // bubble radius in px (square-root scale, like CARTO's bubble layer)
+  var maxUnits = 1;
+  function radius(v) { return v > 0 ? R_MIN + (R_MAX - R_MIN) * Math.sqrt(v / maxUnits) : R_MIN; }
+  function fmt(n) { return (n === null || n === undefined) ? '&ndash;' : Number(n).toLocaleString('en-US'); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  // ---- Layers ----
+  var zoningLayer = L.geoJSON(null, {
+    style: STYLE.zoning,
+    onEachFeature: function (f, l) {
+      var p = f.properties;
+      l.bindPopup('<div class="pp"><span class="tag">Zoning</span><h3>' + esc(p.label || p.zone) + '</h3><div>' + esc(p.desc || '') + '</div></div>');
+    }
+  });
+  var historicLayer = L.geoJSON(null, {
+    style: STYLE.historic,
+    onEachFeature: function (f, l) {
+      var p = f.properties;
+      l.bindPopup('<div class="pp"><span class="tag">Historic District</span><h3>' + esc(p.name) + '</h3><table>' +
+        '<tr><td>Designation</td><td>' + esc(p.designation || '&ndash;') + '</td></tr>' +
+        (p.date ? '<tr><td>Designated</td><td>' + esc(p.date) + '</td></tr>' : '') +
+        '</table></div>');
+    }
+  });
+
+  var housingFeatures = [];
+  var housingLayer = L.geoJSON(null, {
+    pointToLayer: function (f, latlng) {
+      return L.circleMarker(latlng, Object.assign({ radius: radius(f.properties.aff) }, STYLE.bubble));
+    },
+    onEachFeature: function (f, l) {
+      var p = f.properties;
+      var ami = p.ami || [0, 0, 0, 0, 0];
+      var amiLabels = ['0–30% AMI', '31–50% AMI', '51–60% AMI', '61–80% AMI', '81%+ AMI'];
+      var amiRows = '';
+      for (var i = 0; i < ami.length; i++) if (ami[i]) amiRows += '<tr><td>' + amiLabels[i] + '</td><td>' + fmt(ami[i]) + '</td></tr>';
+      l.bindPopup('<div class="pp"><span class="tag">' + esc(p.status) + '</span><h3>' + esc(p.name) + '</h3>' +
+        '<div class="addr">' + esc(p.address || '') + '</div>' +
+        '<div class="big">' + fmt(p.aff) + '<small>affordable units</small></div><table>' +
+        (p.total ? '<tr><td>Total units in project</td><td>' + fmt(p.total) + '</td></tr>' : '') +
+        amiRows +
+        (p.ward ? '<tr><td>Ward</td><td>' + esc(p.ward) + '</td></tr>' : '') +
+        (p.agency ? '<tr><td>Agency</td><td>' + esc(p.agency) + '</td></tr>' : '') +
+        (p.end ? '<tr><td>Construction end</td><td>' + esc(p.end) + '</td></tr>' : '') +
+        '</table></div>', { maxWidth: 320 });
+      l.on('mouseover', function () { this.setStyle({ fillOpacity: 0.85, weight: 1.5 }); });
+      l.on('mouseout', function () { this.setStyle({ fillOpacity: STYLE.bubble.fillOpacity, weight: STYLE.bubble.weight }); });
+    }
+  });
+
+  // Draw order: zoning (bottom) < historic < bubbles (top)
+  zoningLayer.addTo(map); historicLayer.addTo(map); housingLayer.addTo(map);
+
+  // ---- Bubble-size legend (nested circles, bottom-aligned, with leader lines) ----
+  function drawBubbleLegend(max, avg) {
+    var svg = document.getElementById('bubbleLegend');
+    var W = 218, pad = 4, LR = 44;                 // LR: radius of the largest legend bubble
+    var fr = [1, 0.6, 0.35];                       // radius fractions of the largest bubble
+    var vals = fr.map(function (f) { return niceRound(max * f * f); });
+    vals[0] = max;
+    var cx = W - LR - pad, baseY = pad + 2 * LR, H = baseY + pad;
+    svg.setAttribute('height', H);
+    var s = '';
+    fr.forEach(function (f, i) {
+      var r = LR * f, cy = baseY - r, top = cy - r;
+      s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#3f76d9" fill-opacity="' + (0.18 + i * 0.14) + '" stroke="#2a5cc0" stroke-opacity="0.35" stroke-width="1"/>';
+      s += '<line x1="34" y1="' + (top + 0.5) + '" x2="' + cx + '" y2="' + (top + 0.5) + '"/>';
+      s += '<text x="0" y="' + (top + 4.5) + '">' + fmt(vals[i]) + '</text>';
+    });
+    // Average project, drawn at the same scale as the legend bubbles
+    var ra = Math.max(3, LR * Math.sqrt(avg / max)), cya = baseY - ra;
+    s += '<circle cx="' + cx + '" cy="' + cya + '" r="' + ra + '" fill="#1d4fb0" fill-opacity="0.9"/>';
+    s += '<line x1="62" y1="' + cya + '" x2="' + (cx - ra) + '" y2="' + cya + '"/>';
+    s += '<text class="avg" x="0" y="' + (cya + 4) + '">AVG: ' + avg.toFixed(1) + '</text>';
+    svg.innerHTML = s;
+  }
+  function niceRound(v) {
+    if (v >= 100) return Math.round(v / 10) * 10;
+    if (v >= 20) return Math.round(v / 5) * 5;
+    return Math.round(v);
+  }
+
+  // ---- Status filter (chips) + layer toggles (legend rows) ----
+  var activeStatus = { 'Completed 2015 to Date': true, 'Under Construction': true, 'Pipeline': true };
+  function applyStatusFilter() {
+    housingLayer.clearLayers();
+    housingLayer.addData({ type: 'FeatureCollection', features: housingFeatures.filter(function (f) { return activeStatus[f.properties.status]; }) });
+  }
+  document.querySelectorAll('#statusChips .chip').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      var st = chip.getAttribute('data-status');
+      activeStatus[st] = !activeStatus[st];
+      chip.classList.toggle('off', !activeStatus[st]);
+      applyStatusFilter();
+    });
+  });
+  var layersByKey = { historic: historicLayer, zoning: zoningLayer };
+  document.querySelectorAll('.legend .row[data-layer]').forEach(function (row) {
+    row.addEventListener('click', function () {
+      var lyr = layersByKey[row.getAttribute('data-layer')];
+      if (map.hasLayer(lyr)) { map.removeLayer(lyr); row.classList.add('off'); }
+      else { lyr.addTo(map); row.classList.remove('off'); housingLayer.bringToFront(); }
+    });
+  });
+  var legend = document.getElementById('legend');
+  document.getElementById('legendToggle').addEventListener('click', function () {
+    legend.classList.toggle('collapsed');
+    this.textContent = legend.classList.contains('collapsed') ? '+' : '−';
+  });
+  if (EMBED && window.innerWidth < 640) { legend.classList.add('collapsed'); document.getElementById('legendToggle').textContent = '+'; }
+
+  // ---- Load data ----
+  function getJSON(url) { return fetch(url).then(function (r) { if (!r.ok) throw new Error(url + ' ' + r.status); return r.json(); }); }
+  Promise.all([
+    getJSON('assets/data/affordable_housing.geojson'),
+    getJSON('assets/data/historic_districts.geojson'),
+    getJSON('assets/data/single_family_zoning.geojson')
+  ]).then(function (res) {
+    var housing = res[0], historic = res[1], zoning = res[2];
+    housingFeatures = housing.features;
+    var sum = 0; maxUnits = 1;
+    housingFeatures.forEach(function (f) { var v = f.properties.aff || 0; sum += v; if (v > maxUnits) maxUnits = v; });
+    var avg = housingFeatures.length ? sum / housingFeatures.length : 0;
+    zoningLayer.addData(zoning);
+    historicLayer.addData(historic);
+    applyStatusFilter();
+    drawBubbleLegend(maxUnits, avg);
+  }).catch(function (err) {
+    console.error(err);
+    var el = document.createElement('div');
+    el.style.cssText = 'position:absolute;bottom:30px;left:12px;z-index:1000;background:#fff;padding:8px 12px;border-radius:4px;font-size:12px;box-shadow:0 2px 6px rgba(0,0,0,.2)';
+    el.textContent = 'Map data could not be loaded. Please refresh the page.';
+    document.body.appendChild(el);
+  });
+})();
+</script>
+</body>
+</html>

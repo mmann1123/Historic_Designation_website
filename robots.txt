@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /unpublished/
+
+Sitemap: https://www.reformhd.org/sitemap.xml
